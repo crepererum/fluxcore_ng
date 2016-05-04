@@ -345,7 +345,7 @@ fn main() {
                 &program_points,
                 &uniform! {
                     matrix: projection.get_matrix(),
-                    n:         n,
+                    inv_n:     1.0 / (n as f32),
                     pointsize: pointsize,
                 },
                 &params_points
