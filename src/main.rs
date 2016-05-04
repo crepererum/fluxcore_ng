@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy)]
 struct Point {
-    position: [f32; 2],
+    position: [f32; 3],
 }
 implement_vertex!(Point, position);
 
@@ -140,10 +140,10 @@ fn columns_from_file(fname: &String) -> Result<Vec<Column>, String> {
     Ok(columns)
 }
 
-fn points_from_columns(cols: &Vec<Column>, a: usize, b: usize) -> Vec<Point> {
-    cols[a].data.iter().zip(cols[b].data.iter()).map(|(x, y)| {
+fn points_from_columns(cols: &Vec<Column>, a: usize, b: usize, c: usize) -> Vec<Point> {
+    cols[a].data.iter().zip(cols[b].data.iter()).zip(cols[c].data.iter()).map(|((x, y), z)| {
         Point {
-            position: [x.clone(), y.clone()]
+            position: [x.clone(), y.clone(), z.clone()]
         }
     }).collect()
 }
@@ -163,8 +163,10 @@ pub fn build_renderable_texture<F>(facade: &F, width: u32, height: u32) -> glium
 struct Projection {
     scale_x: f32,
     scale_y: f32,
+    scale_z: f32,
     delta_x: f32,
     delta_y: f32,
+    delta_z: f32,
 }
 
 impl Projection {
@@ -172,8 +174,10 @@ impl Projection {
         Projection {
             scale_x: 1.0,
             scale_y: 1.0,
+            scale_z: 1.0,
             delta_x: 0.0,
             delta_y: 0.0,
+            delta_z: 0.0,
         }
     }
 
@@ -191,6 +195,14 @@ impl Projection {
         }
         self.delta_y = -1.0 - min * self.scale_y;
         debug!("adjust y projection: data_range=[{}, {}] scale={} delta={}", min, max, self.scale_y, self.delta_y);
+    }
+
+    fn adjust_z(&mut self, min: f32, max: f32) {
+        if max != min {
+            self.scale_z = 1.0 / (max - min);
+        }
+        self.delta_z = -min * self.scale_z;
+        debug!("adjust z projection: data_range=[{}, {}] scale={} delta={}", min, max, self.scale_z, self.delta_z);
     }
 
     fn move_x(&mut self, dx: i32, width: u32) {
@@ -219,10 +231,10 @@ impl Projection {
 
     fn get_matrix(&self) -> [[f32; 4]; 4] {
         [
-            [self.scale_x, 0.0         , 0.0, 0.0],
-            [0.0         , self.scale_y, 0.0, 0.0],
-            [0.0         , 0.0         , 1.0, 0.0],
-            [self.delta_x, self.delta_y, 0.0, 1.0],
+            [self.scale_x, 0.0         , 0.0         , 0.0],
+            [0.0         , self.scale_y, 0.0         , 0.0],
+            [0.0         , 0.0         , self.scale_z, 0.0],
+            [self.delta_x, self.delta_y, self.delta_z, 1.0],
         ]
     }
 }
@@ -267,7 +279,8 @@ fn main() {
     let m = columns.len();
     let mut column_x: usize = 0;
     let mut column_y: usize = 1;
-    let mut points = points_from_columns(&columns, column_x, column_y);
+    let mut column_z: usize = if m > 2 { 2 } else { 1 };
+    let mut points = points_from_columns(&columns, column_x, column_y, column_z);
     let n = points.len() as u32;
 
     info!("set up OpenGL stuff");
@@ -330,6 +343,7 @@ fn main() {
     let mut projection = Projection::new();
     projection.adjust_x(columns[column_x].min, columns[column_x].max);
     projection.adjust_y(columns[column_y].min, columns[column_y].max);
+    projection.adjust_z(columns[column_z].min, columns[column_z].max);
 
     info!("starting main loop");
     let mut mouse_x: u32 = 0;
@@ -439,6 +453,24 @@ fn main() {
                             projection.adjust_y(columns[column_y].min, columns[column_y].max);
                             redraw = true;
                         },
+                        glutin::VirtualKeyCode::PageUp => {
+                            if column_z == 0 {
+                                column_z = m as usize;
+                            }
+                            column_z -= 1;
+                            rebuild_points = true;
+                            projection.adjust_z(columns[column_z].min, columns[column_z].max);
+                            redraw = true;
+                        },
+                        glutin::VirtualKeyCode::PageDown => {
+                            column_z += 1;
+                            if column_z >= m {
+                                column_z = 0;
+                            }
+                            rebuild_points = true;
+                            projection.adjust_z(columns[column_z].min, columns[column_z].max);
+                            redraw = true;
+                        },
                         _ => ()
                     }
                 },
@@ -476,8 +508,8 @@ fn main() {
 
         // step 4: update geometry
         if rebuild_points {
-            points = points_from_columns(&columns, column_x, column_y);
-            vertex_buffer_points  = glium::VertexBuffer::new(&display, &points).unwrap();
+            points               = points_from_columns(&columns, column_x, column_y, column_z);
+            vertex_buffer_points = glium::VertexBuffer::new(&display, &points).unwrap();
         }
 
         // step 5: throttle FPS
