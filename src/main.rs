@@ -172,6 +172,15 @@ impl Projection {
         debug!("adjust y projection: data_range=[{}, {}] scale={} delta={}", min, max, self.scale_y, self.delta_y);
     }
 
+    fn move_x(&mut self, dx: i32, width: u32) {
+        self.delta_x += 2.0 * (dx as f32) / (width as f32);
+
+    }
+
+    fn move_y(&mut self, dy: i32, height: u32) {
+        self.delta_y -= 2.0 * (dy as f32) / (height as f32);
+    }
+
     fn get_matrix(&self) -> [[f32; 4]; 4] {
         [
             [self.scale_x, 0.0         , 0.0, 0.0],
@@ -287,6 +296,9 @@ fn main() {
     projection.adjust_y(columns[column_y].min, columns[column_y].max);
 
     info!("starting main loop");
+    let mut mouse_x: i32 = 0;
+    let mut mouse_y: i32 = 0;
+    let mut mouse_down   = false;
     'mainloop: loop {
         // step 1: draw to texture
         texture.as_surface().clear_color(0.0, 0.0, 0.0, 0.0);
@@ -375,11 +387,27 @@ fn main() {
                         _ => ()
                     }
                 },
+                glutin::Event::MouseInput(glutin::ElementState::Pressed, glutin::MouseButton::Left) => {
+                    mouse_down = true;
+                },
+                glutin::Event::MouseInput(glutin::ElementState::Released, glutin::MouseButton::Left) => {
+                    mouse_down = false;
+                },
+                glutin::Event::MouseMoved(posx, posy) => {
+                    if mouse_down {
+                        let dx = posx - mouse_x;
+                        let dy = posy - mouse_y;
+                        projection.move_x(dx, width);
+                        projection.move_y(dy, height);
+                    }
+                    mouse_x = posx;
+                    mouse_y = posy;
+                },
                 glutin::Event::Resized(w, h) => {
                     width = w;
                     height = h;
                     texture = build_renderable_texture(&display, width, height);
-                }
+                },
                 _ => ()
             }
         }
