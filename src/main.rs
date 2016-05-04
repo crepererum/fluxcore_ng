@@ -42,7 +42,7 @@ static POINTSIZE_DEFAULT: f32 = 10.0;
 static POINTSIZE_MIN:     f32 = 2.0;
 static POINTSIZE_MAX:     f32 = 30.0;
 static SCALE_MIN:         f32 = 0.00000001;
-static SCROLL_FACTOR:     f32 = 0.05;
+static SCROLL_BASE:       f32 = 1.1;
 
 
 fn is_uint_and_geq_100(s: String) -> Result<(), String> {
@@ -204,14 +204,16 @@ impl Projection {
     fn scroll_x(&mut self, dx: f32, posx: u32, width: u32) {
         let posx_relative = 2.0 * (posx as f32) / (width as f32) - 1.0;
         let scale_x_old = self.scale_x;
-        self.scale_x = f32::max(SCALE_MIN, self.scale_x + dx);
+        let factor_x = SCROLL_BASE.powf(dx);
+        self.scale_x = f32::max(SCALE_MIN, self.scale_x * factor_x);
         self.delta_x += (scale_x_old - self.scale_x) * (posx_relative - self.delta_x) / scale_x_old;
     }
 
     fn scroll_y(&mut self, dy: f32, posy: u32, height: u32) {
         let posy_relative = -(2.0 * (posy as f32) / (height as f32) - 1.0);
         let scale_y_old = self.scale_y;
-        self.scale_y = f32::max(SCALE_MIN, self.scale_y + dy);
+        let factor_y = SCROLL_BASE.powf(dy);
+        self.scale_y = f32::max(SCALE_MIN, self.scale_y * factor_y);
         self.delta_y += (scale_y_old - self.scale_y) * (posy_relative - self.delta_y) / scale_y_old;
     }
 
@@ -458,8 +460,8 @@ fn main() {
                     mouse_y = posy as u32;
                 },
                 glutin::Event::MouseWheel(glutin::MouseScrollDelta::LineDelta(dx, dy), glutin::TouchPhase::Moved) => {
-                    projection.scroll_x(dx * SCROLL_FACTOR, mouse_x, width);
-                    projection.scroll_y(dy * SCROLL_FACTOR, mouse_y, height);
+                    projection.scroll_x(dx, mouse_x, width);
+                    projection.scroll_y(dy, mouse_y, height);
                     redraw = true;
                 },
                 glutin::Event::Resized(w, h) => {
