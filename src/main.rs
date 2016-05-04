@@ -6,6 +6,7 @@ extern crate env_logger;
 
 use clap::{Arg, App};
 use glium::{DisplayBuild, Surface};
+use glium::backend::Facade;
 use glium::glutin;
 use std::f32;
 
@@ -16,10 +17,23 @@ struct Point {
 }
 implement_vertex!(Point, position);
 
+#[derive(Clone, Copy)]
+struct TextureVertex {
+    position:   [f32; 2],
+    tex_coords: [f32; 2],
+}
+implement_vertex!(TextureVertex, position, tex_coords);
 
-static VERTEX_SHADER_SRC:   &'static str = include_str!("../res/shader.points.vertex.glsl");
-static FRAGMENT_SHADER_SRC: &'static str = include_str!("../res/shader.points.fragment.glsl");
 
+static VERTEX_SHADER_POINTS_SRC:    &'static str = include_str!("../res/shader.points.vertex.glsl");
+static FRAGMENT_SHADER_POINTS_SRC:  &'static str = include_str!("../res/shader.points.fragment.glsl");
+static VERTEX_SHADER_TEXTURE_SRC:   &'static str = include_str!("../res/shader.texture.vertex.glsl");
+static FRAGMENT_SHADER_TEXTURE_SRC: &'static str = include_str!("../res/shader.texture.fragment.glsl");
+
+static GAMMA_CHANGE:      f32 = 1.1;
+static GAMMA_DEFAULT:     f32 = 10.0;
+static GAMMA_MIN:         f32 = 1.0;
+static GAMMA_MAX:         f32 = 100.0;
 static POINTSIZE_CHANGE:  f32 = 1.1;
 static POINTSIZE_DEFAULT: f32 = 10.0;
 static POINTSIZE_MIN:     f32 = 2.0;
@@ -114,6 +128,17 @@ fn points_from_columns(cols: &Vec<Column>, a: usize, b: usize) -> Vec<Point> {
 }
 
 
+pub fn build_renderable_texture<F>(facade: &F, width: u32, height: u32) -> glium::Texture2d where F: Facade {
+    glium::Texture2d::empty_with_format(
+        facade,
+        glium::texture::UncompressedFloatFormat::F32F32F32F32,
+        glium::texture::MipmapsOption::NoMipmap,
+        width,
+        height
+    ).unwrap()
+}
+
+
 fn main() {
     env_logger::init().unwrap();
     info!("that's fluxcore...booting up!");
@@ -151,8 +176,18 @@ fn main() {
         }
     };
     let points = points_from_columns(&columns, 0, 1);
+    let n = points.len() as u32;
 
     info!("set up OpenGL stuff");
+    let vertices_texture = vec![
+        TextureVertex { position: [-1.0, -1.0], tex_coords: [0.0, 0.0] },
+        TextureVertex { position: [ 1.0,  1.0], tex_coords: [1.0, 1.0] },
+        TextureVertex { position: [-1.0,  1.0], tex_coords: [0.0, 1.0] },
+        TextureVertex { position: [-1.0, -1.0], tex_coords: [0.0, 0.0] },
+        TextureVertex { position: [ 1.0, -1.0], tex_coords: [1.0, 0.0] },
+        TextureVertex { position: [ 1.0,  1.0], tex_coords: [1.0, 1.0] },
+    ];
+
     let display = glutin::WindowBuilder::new()
         .with_dimensions(width, height)
         .with_gl(glutin::GlRequest::Specific(
@@ -163,44 +198,74 @@ fn main() {
         .with_title(format!("fluxcore_ng"))
         .build_glium()
         .unwrap();
+    let mut texture = build_renderable_texture(&display, width, height);
 
-    let vertex_buffer = glium::VertexBuffer::new(&display, &points).unwrap();
-    let indices = glium::index::NoIndices(glium::index::PrimitiveType::Points);
+    let vertex_buffer_points  = glium::VertexBuffer::new(&display, &points).unwrap();
+    let vertex_buffer_texture = glium::VertexBuffer::new(&display, &vertices_texture).unwrap();
+    let indices_points  = glium::index::NoIndices(glium::index::PrimitiveType::Points);
+    let indices_texture = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
-    let source_code = glium::program::ProgramCreationInput::SourceCode {
-        fragment_shader: FRAGMENT_SHADER_SRC,
+    let source_code_points = glium::program::ProgramCreationInput::SourceCode {
+        fragment_shader: FRAGMENT_SHADER_POINTS_SRC,
         geometry_shader: None,
         outputs_srgb: false,
         tessellation_control_shader: None,
         tessellation_evaluation_shader: None,
         transform_feedback_varyings: None,
         uses_point_size: true,
-        vertex_shader: VERTEX_SHADER_SRC,
+        vertex_shader: VERTEX_SHADER_POINTS_SRC,
     };
-    let program = glium::Program::new(&display, source_code).unwrap();
+    let program_points = glium::Program::new(&display, source_code_points).unwrap();
+    let program_texture = glium::Program::from_source(&display, VERTEX_SHADER_TEXTURE_SRC, FRAGMENT_SHADER_TEXTURE_SRC, None).unwrap();
 
-    let params = glium::DrawParameters {
-        blend: glium::Blend::alpha_blending(),
+    let params_points = glium::DrawParameters {
+        blend: glium::Blend {
+            color: glium::BlendingFunction::Addition {
+                source: glium::LinearBlendingFactor::One,
+                destination: glium::LinearBlendingFactor::One,
+            },
+            alpha: glium::BlendingFunction::Addition {
+                source: glium::LinearBlendingFactor::One,
+                destination: glium::LinearBlendingFactor::One
+            },
+            constant_value: (0.0, 0.0, 0.0, 0.0)
+        },
         .. Default::default()
     };
 
+    let mut gamma:     f32 = GAMMA_DEFAULT;
     let mut pointsize: f32 = POINTSIZE_DEFAULT;
 
     info!("starting main loop");
     'mainloop: loop {
-        let mut target = display.draw();
-        target.clear_color(0.0, 0.0, 0.0, 1.0);
-        target.draw(
-            &vertex_buffer,
-            &indices,
-            &program,
+        // step 1: draw to texture
+        texture.as_surface().clear_color(0.0, 0.0, 0.0, 0.0);
+        texture.as_surface().draw(
+            &vertex_buffer_points,
+            &indices_points,
+            &program_points,
             &uniform! {
+                n:         n,
                 pointsize: pointsize,
             },
-            &params
+            &params_points
+        ).unwrap();
+
+        // step 2: draw texture to screen
+        let mut target = display.draw();
+        target.draw(
+            &vertex_buffer_texture,
+            &indices_texture,
+            &program_texture,
+            &uniform! {
+                inv_gamma: (1.0 / gamma) as f32,
+                tex:       &texture,
+            },
+            &Default::default()
         ).unwrap();
         target.finish().unwrap();
 
+        // step 3: handle events
         for ev in display.poll_events() {
             match ev {
                 glutin::Event::Closed => {
@@ -217,12 +282,19 @@ fn main() {
                         glutin::VirtualKeyCode::K => {
                             pointsize = f32::max(pointsize / POINTSIZE_CHANGE, POINTSIZE_MIN);
                         },
+                        glutin::VirtualKeyCode::N => {
+                            gamma = f32::min(gamma * GAMMA_CHANGE, GAMMA_MAX);
+                        },
+                        glutin::VirtualKeyCode::M => {
+                            gamma = f32::max(gamma / GAMMA_CHANGE, GAMMA_MIN);
+                        },
                         _ => ()
                     }
                 },
                 glutin::Event::Resized(w, h) => {
                     width = w;
                     height = h;
+                    texture = build_renderable_texture(&display, width, height);
                 }
                 _ => ()
             }
