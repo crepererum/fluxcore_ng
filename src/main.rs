@@ -83,6 +83,18 @@ impl Column {
 }
 
 
+fn is_na_string(s: &String) -> bool {
+    let lower = s.to_lowercase();
+    if lower == "?" {
+        true
+    } else if lower == "na" {
+        true
+    } else {
+        false
+    }
+}
+
+
 fn columns_from_file(fname: &String) -> Result<Vec<Column>, String> {
     let mut rdr = match csv::Reader::from_file(fname) {
         Ok(f) => f.has_headers(true),
@@ -108,10 +120,14 @@ fn columns_from_file(fname: &String) -> Result<Vec<Column>, String> {
         }
 
         for (j, cell) in row.iter().enumerate() {
-            let value = match cell.parse::<f32>() {
-                Ok(v) => v,
-                Err(_) => {
-                    return Err(format!("cannot parse column {} in row {}", j + 1, i + 1));
+            let value = if is_na_string(cell) {
+                f32::NAN
+            } else {
+                match cell.parse::<f32>() {
+                    Ok(v) => v,
+                    Err(_) => {
+                        return Err(format!("cannot parse column {} in row {}", j + 1, i + 1));
+                    }
                 }
             };
             columns[j].push(value);
