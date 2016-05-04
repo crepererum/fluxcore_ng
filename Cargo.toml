@@ -4,8 +4,8 @@ version = "0.1.0"
 authors = ["Marco Neumann <marco@crepererum.net>"]
 
 [dependencies]
-clap       = "*"
-csv        = "*"
-env_logger = "*"
-glium      = "*"
-log        = "*"
+clap       = "2.4"
+csv        = "0.14"
+env_logger = "0.3"
+glium      = "0.14"
+log        = "0.3"
