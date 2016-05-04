@@ -139,6 +139,50 @@ pub fn build_renderable_texture<F>(facade: &F, width: u32, height: u32) -> glium
 }
 
 
+struct Projection {
+    scale_x: f32,
+    scale_y: f32,
+    delta_x: f32,
+    delta_y: f32,
+}
+
+impl Projection {
+    fn new() -> Projection {
+        Projection {
+            scale_x: 1.0,
+            scale_y: 1.0,
+            delta_x: 0.0,
+            delta_y: 0.0,
+        }
+    }
+
+    fn adjust_x(&mut self, min: f32, max: f32) {
+        if max != min {
+            self.scale_x = 2.0 / (max - min);
+        }
+        self.delta_x = -1.0 - min * self.scale_x;
+        debug!("adjust x projection: data_range=[{}, {}] scale={} delta={}", min, max, self.scale_x, self.delta_x);
+    }
+
+    fn adjust_y(&mut self, min: f32, max: f32) {
+        if max != min {
+            self.scale_y = 2.0 / (max - min);
+        }
+        self.delta_y = -1.0 - min * self.scale_y;
+        debug!("adjust y projection: data_range=[{}, {}] scale={} delta={}", min, max, self.scale_y, self.delta_y);
+    }
+
+    fn get_matrix(&self) -> [[f32; 4]; 4] {
+        [
+            [self.scale_x, 0.0         , 0.0, 0.0],
+            [0.0         , self.scale_y, 0.0, 0.0],
+            [0.0         , 0.0         , 1.0, 0.0],
+            [self.delta_x, self.delta_y, 0.0, 1.0],
+        ]
+    }
+}
+
+
 fn main() {
     env_logger::init().unwrap();
     info!("that's fluxcore...booting up!");
@@ -175,7 +219,10 @@ fn main() {
             return;
         }
     };
-    let points = points_from_columns(&columns, 0, 1);
+    let m = columns.len();
+    let column_x: usize = 0;
+    let column_y: usize = 1;
+    let points = points_from_columns(&columns, column_x, column_y);
     let n = points.len() as u32;
 
     info!("set up OpenGL stuff");
@@ -235,6 +282,9 @@ fn main() {
 
     let mut gamma:     f32 = GAMMA_DEFAULT;
     let mut pointsize: f32 = POINTSIZE_DEFAULT;
+    let mut projection = Projection::new();
+    projection.adjust_x(columns[column_x].min, columns[column_x].max);
+    projection.adjust_y(columns[column_y].min, columns[column_y].max);
 
     info!("starting main loop");
     'mainloop: loop {
@@ -245,6 +295,7 @@ fn main() {
             &indices_points,
             &program_points,
             &uniform! {
+                matrix: projection.get_matrix(),
                 n:         n,
                 pointsize: pointsize,
             },
