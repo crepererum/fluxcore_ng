@@ -220,9 +220,9 @@ fn main() {
         }
     };
     let m = columns.len();
-    let column_x: usize = 0;
-    let column_y: usize = 1;
-    let points = points_from_columns(&columns, column_x, column_y);
+    let mut column_x: usize = 0;
+    let mut column_y: usize = 1;
+    let mut points = points_from_columns(&columns, column_x, column_y);
     let n = points.len() as u32;
 
     info!("set up OpenGL stuff");
@@ -247,7 +247,7 @@ fn main() {
         .unwrap();
     let mut texture = build_renderable_texture(&display, width, height);
 
-    let vertex_buffer_points  = glium::VertexBuffer::new(&display, &points).unwrap();
+    let mut vertex_buffer_points  = glium::VertexBuffer::new(&display, &points).unwrap();
     let vertex_buffer_texture = glium::VertexBuffer::new(&display, &vertices_texture).unwrap();
     let indices_points  = glium::index::NoIndices(glium::index::PrimitiveType::Points);
     let indices_texture = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
@@ -317,6 +317,7 @@ fn main() {
         target.finish().unwrap();
 
         // step 3: handle events
+        let mut rebuild_points = false;
         for ev in display.poll_events() {
             match ev {
                 glutin::Event::Closed => {
@@ -339,6 +340,38 @@ fn main() {
                         glutin::VirtualKeyCode::M => {
                             gamma = f32::max(gamma / GAMMA_CHANGE, GAMMA_MIN);
                         },
+                        glutin::VirtualKeyCode::Left => {
+                            if column_x == 0 {
+                                column_x = m as usize;
+                            }
+                            column_x -= 1;
+                            rebuild_points = true;
+                            projection.adjust_x(columns[column_x].min, columns[column_x].max);
+                        },
+                        glutin::VirtualKeyCode::Right => {
+                            column_x += 1;
+                            if column_x >= m {
+                                column_x = 0;
+                            }
+                            rebuild_points = true;
+                            projection.adjust_x(columns[column_x].min, columns[column_x].max);
+                        },
+                        glutin::VirtualKeyCode::Up => {
+                            if column_y == 0 {
+                                column_y = m as usize;
+                            }
+                            column_y -= 1;
+                            rebuild_points = true;
+                            projection.adjust_y(columns[column_y].min, columns[column_y].max);
+                        },
+                        glutin::VirtualKeyCode::Down => {
+                            column_y += 1;
+                            if column_y >= m {
+                                column_y = 0;
+                            }
+                            rebuild_points = true;
+                            projection.adjust_y(columns[column_y].min, columns[column_y].max);
+                        },
                         _ => ()
                     }
                 },
@@ -349,6 +382,11 @@ fn main() {
                 }
                 _ => ()
             }
+        }
+
+        if rebuild_points {
+            points = points_from_columns(&columns, column_x, column_y);
+            vertex_buffer_points  = glium::VertexBuffer::new(&display, &points).unwrap();
         }
     }
 
