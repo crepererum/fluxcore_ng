@@ -300,7 +300,7 @@ fn main() {
             (3, 3)
         ))
         .with_gl_profile(glutin::GlProfile::Core)
-        .with_title(format!("fluxcore_ng"))
+        .with_title(format!("fluxcore_ng - {}", file))
         .build_glium()
         .unwrap();
     let mut texture = build_renderable_texture(&display, width, height);
