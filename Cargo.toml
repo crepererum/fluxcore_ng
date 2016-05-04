@@ -1,0 +1,11 @@
+[package]
+name = "fluxcore_ng"
+version = "0.1.0"
+authors = ["Marco Neumann <marco@crepererum.net>"]
+
+[dependencies]
+clap       = "*"
+csv        = "*"
+env_logger = "*"
+glium      = "*"
+log        = "*"
