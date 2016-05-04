@@ -40,7 +40,7 @@ static GAMMA_MAX:         f32 = 100.0;
 static POINTSIZE_CHANGE:  f32 = 1.1;
 static POINTSIZE_DEFAULT: f32 = 10.0;
 static POINTSIZE_MIN:     f32 = 2.0;
-static POINTSIZE_MAX:     f32 = 30.0;
+static POINTSIZE_MAX:     f32 = 100.0;
 static SCALE_MIN:         f32 = 0.00000001;
 static SCROLL_BASE:       f32 = 1.1;
 
