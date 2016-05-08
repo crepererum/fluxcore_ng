@@ -32,17 +32,18 @@ static FRAGMENT_SHADER_POINTS_SRC:  &'static str = include_str!("../res/shader.p
 static VERTEX_SHADER_TEXTURE_SRC:   &'static str = include_str!("../res/shader.texture.vertex.glsl");
 static FRAGMENT_SHADER_TEXTURE_SRC: &'static str = include_str!("../res/shader.texture.fragment.glsl");
 
-static FRAME_MILLIS:      u64 = 50;
-static GAMMA_CHANGE:      f32 = 1.1;
-static GAMMA_DEFAULT:     f32 = 10.0;
-static GAMMA_MIN:         f32 = 1.0;
-static GAMMA_MAX:         f32 = 100.0;
-static POINTSIZE_CHANGE:  f32 = 1.1;
-static POINTSIZE_DEFAULT: f32 = 10.0;
-static POINTSIZE_MIN:     f32 = 2.0;
-static POINTSIZE_MAX:     f32 = 100.0;
-static SCALE_MIN:         f32 = 0.00000001;
-static SCROLL_BASE:       f32 = 1.1;
+static FRAME_MILLIS:       u64  = 50;
+static GAMMA_CHANGE:       f32  = 1.1;
+static GAMMA_DEFAULT:      f32  = 10.0;
+static GAMMA_MIN:          f32  = 1.0;
+static GAMMA_MAX:          f32  = 100.0;
+static POINTSIZE_CHANGE:   f32  = 1.1;
+static POINTSIZE_DEFAULT:  f32  = 10.0;
+static POINTSIZE_MIN:      f32  = 2.0;
+static POINTSIZE_MAX:      f32  = 100.0;
+static SCALE_MIN:          f32  = 0.00000001;
+static SCROLL_BASE:        f32  = 1.1;
+static SHOWBORDER_DEFAULT: bool = true;
 
 
 fn is_uint_and_geq_100(s: String) -> Result<(), String> {
@@ -338,8 +339,9 @@ fn main() {
         .. Default::default()
     };
 
-    let mut gamma:     f32 = GAMMA_DEFAULT;
-    let mut pointsize: f32 = POINTSIZE_DEFAULT;
+    let mut gamma:      f32  = GAMMA_DEFAULT;
+    let mut pointsize:  f32  = POINTSIZE_DEFAULT;
+    let mut showborder: bool = SHOWBORDER_DEFAULT;
     let mut projection = Projection::new();
     projection.adjust_x(columns[column_x].min, columns[column_x].max);
     projection.adjust_y(columns[column_y].min, columns[column_y].max);
@@ -363,6 +365,7 @@ fn main() {
                     matrix: projection.get_matrix(),
                     inv_n:     1.0 / (n as f32),
                     pointsize: pointsize,
+                    showborder: if showborder { 1f32 } else { 0f32 },
                 },
                 &params_points
             ).unwrap();
@@ -396,6 +399,10 @@ fn main() {
                         glutin::VirtualKeyCode::Escape => {
                             break 'mainloop;
                         }
+                        glutin::VirtualKeyCode::B => {
+                            showborder = !showborder;
+                            redraw = true;
+                        },
                         glutin::VirtualKeyCode::J => {
                             pointsize = f32::min(pointsize * POINTSIZE_CHANGE, POINTSIZE_MAX);
                             redraw = true;
@@ -416,8 +423,9 @@ fn main() {
                             projection.adjust_x(columns[column_x].min, columns[column_x].max);
                             projection.adjust_y(columns[column_y].min, columns[column_y].max);
                             projection.adjust_z(columns[column_z].min, columns[column_z].max);
-                            gamma     = GAMMA_DEFAULT;
-                            pointsize = POINTSIZE_DEFAULT;
+                            gamma      = GAMMA_DEFAULT;
+                            pointsize  = POINTSIZE_DEFAULT;
+                            showborder = SHOWBORDER_DEFAULT;
                             redraw = true;
                         },
                         glutin::VirtualKeyCode::Left => {

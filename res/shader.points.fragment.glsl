@@ -1,6 +1,7 @@
 #version 140
 
-in vec3 pointcolor;
+in vec3  pointcolor;
+in float atborder;
 
 out vec4 color;
 
@@ -10,11 +11,14 @@ void main() {
     vec2  delta    = vec2(0.5, 0.5) - gl_PointCoord;
     float dcenter2 = dot(delta, delta);
 
-    // discard with some offset (for smoothing)
-    if (dcenter2 > 0.26) {
-        discard;
+    float fade = 1.0 - step(0.25, dcenter2);
+
+    if (atborder > 0.5) {
+        fade *= step(0.15, dcenter2);
     }
 
-    float fade = 1.0 - step(0.25, dcenter2);
+    if (fade < 0.000001) {
+        discard;
+    }
     color = vec4(pointcolor, 1.0) * fade * vec4(inv_n);
 }
