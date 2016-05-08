@@ -24,23 +24,25 @@ void main() {
     float alpha = 1.0;
     atborder = 0.0;
     if (showborder > 0.5) {
+        float dist = 0.0;
         if (gl_Position.x > 1.0) {
+            dist += gl_Position.x;
             gl_Position.x = 1.0;
-            atborder = 1.0;
         } else if (gl_Position.x < -1.0) {
+            dist -= gl_Position.x;
             gl_Position.x = -1.0;
-            atborder = 1.0;
         }
         if (gl_Position.y > 1.0) {
+            dist += gl_Position.y;
             gl_Position.y = 1.0;
-            atborder = 1.0;
         } else if (gl_Position.y < -1.0) {
+            dist -= gl_Position.y;
             gl_Position.y= -1.0;
-            atborder = 1.0;
         }
-        if (atborder > 0.5) {
-            gl_PointSize = 20.0;
-            alpha        = 0.5;
+        if (dist > 0.0) {
+            gl_PointSize /= dist;
+            alpha        = 1.0 / dist;
+            atborder     = 1.0;
         }
     }
 
