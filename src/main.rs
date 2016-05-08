@@ -37,6 +37,8 @@ static GAMMA_CHANGE:       f32  = 1.1;
 static GAMMA_DEFAULT:      f32  = 10.0;
 static GAMMA_MIN:          f32  = 1.0;
 static GAMMA_MAX:          f32  = 100.0;
+static LOWRES_FACTOR:      f32  = 0.2;
+static LOWRES_MILLIS:      u64  = 500;
 static POINTSIZE_CHANGE:   f32  = 1.1;
 static POINTSIZE_DEFAULT:  f32  = 10.0;
 static POINTSIZE_MIN:      f32  = 2.0;
@@ -304,7 +306,8 @@ fn main() {
         .with_title(format!("fluxcore_ng - {}", file))
         .build_glium()
         .unwrap();
-    let mut texture = build_renderable_texture(&display, width, height);
+    let mut texture_std    = build_renderable_texture(&display, width, height);
+    let mut texture_lowres = build_renderable_texture(&display, ((width as f32) * LOWRES_FACTOR) as u32, ((height as f32) * LOWRES_FACTOR) as u32);
 
     let mut vertex_buffer_points  = glium::VertexBuffer::new(&display, &points).unwrap();
     let vertex_buffer_texture = glium::VertexBuffer::new(&display, &vertices_texture).unwrap();
@@ -352,12 +355,35 @@ fn main() {
     let mut mouse_y: u32 = 0;
     let mut mouse_down   = false;
     let mut last_frame   = Instant::now();
-    let mut redraw       = false;
+    let mut redraw       = true;
+    let mut lowres       = false;
+    let mut lowres_start = Instant::now();
     'mainloop: loop {
         // step 1: draw to texture if requested
         if redraw {
-            texture.as_surface().clear_color(0.0, 0.0, 0.0, 0.0);
-            texture.as_surface().draw(
+            texture_lowres.as_surface().clear_color(0.0, 0.0, 0.0, 0.0);
+            texture_lowres.as_surface().draw(
+                &vertex_buffer_points,
+                &indices_points,
+                &program_points,
+                &uniform! {
+                    matrix: projection.get_matrix(),
+                    inv_n:     1.0 / (n as f32),
+                    pointsize: pointsize * LOWRES_FACTOR,
+                    showborder: if showborder { 1f32 } else { 0f32 },
+                },
+                &params_points
+            ).unwrap();
+
+            redraw = false;
+            lowres = true;
+            lowres_start = Instant::now();
+        }
+        let lowres_now   = Instant::now();
+        let lowres_delta = lowres_now.duration_since(lowres_start);
+        if lowres_delta > Duration::from_millis(LOWRES_MILLIS) {
+            texture_std.as_surface().clear_color(0.0, 0.0, 0.0, 0.0);
+            texture_std.as_surface().draw(
                 &vertex_buffer_points,
                 &indices_points,
                 &program_points,
@@ -369,8 +395,7 @@ fn main() {
                 },
                 &params_points
             ).unwrap();
-
-            redraw = false;
+            lowres = false;
         }
 
         // step 2: draw texture to screen
@@ -381,7 +406,7 @@ fn main() {
             &program_texture,
             &uniform! {
                 inv_gamma: (1.0 / gamma) as f32,
-                tex:       &texture,
+                tex:       if lowres { &texture_lowres } else {&texture_std},
             },
             &Default::default()
         ).unwrap();
@@ -508,9 +533,10 @@ fn main() {
                     redraw = true;
                 },
                 glutin::Event::Resized(w, h) => {
-                    width = w;
+                    width  = w;
                     height = h;
-                    texture = build_renderable_texture(&display, width, height);
+                    texture_std    = build_renderable_texture(&display, width, height);
+                    texture_lowres = build_renderable_texture(&display, ((width as f32) * LOWRES_FACTOR) as u32, ((height as f32) * LOWRES_FACTOR) as u32);
                     redraw = true;
                 },
                 _ => ()
