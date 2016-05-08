@@ -3,6 +3,7 @@ extern crate env_logger;
 #[macro_use] extern crate glium;
 #[macro_use] extern crate log;
 
+mod cfg;
 mod data;
 mod res;
 
@@ -23,21 +24,6 @@ struct TextureVertex {
 
 implement_vertex!(Point, position);
 implement_vertex!(TextureVertex, position, tex_coords);
-
-static FRAME_MILLIS:       u64  = 50;
-static GAMMA_CHANGE:       f32  = 1.1;
-static GAMMA_DEFAULT:      f32  = 10.0;
-static GAMMA_MIN:          f32  = 1.0;
-static GAMMA_MAX:          f32  = 100.0;
-static LOWRES_FACTOR:      f32  = 0.2;
-static LOWRES_MILLIS:      u64  = 500;
-static POINTSIZE_CHANGE:   f32  = 1.1;
-static POINTSIZE_DEFAULT:  f32  = 10.0;
-static POINTSIZE_MIN:      f32  = 2.0;
-static POINTSIZE_MAX:      f32  = 100.0;
-static SCALE_MIN:          f32  = 0.00000001;
-static SCROLL_BASE:        f32  = 1.1;
-static SHOWBORDER_DEFAULT: bool = true;
 
 
 fn is_uint_and_geq_100(s: String) -> Result<(), String> {
@@ -123,16 +109,16 @@ impl Projection {
     fn scroll_x(&mut self, dx: f32, posx: u32, width: u32) {
         let posx_relative = 2.0 * (posx as f32) / (width as f32) - 1.0;
         let scale_x_old = self.scale_x;
-        let factor_x = SCROLL_BASE.powf(dx);
-        self.scale_x = f32::max(SCALE_MIN, self.scale_x * factor_x);
+        let factor_x = cfg::SCROLL_BASE.powf(dx);
+        self.scale_x = f32::max(cfg::SCALE_MIN, self.scale_x * factor_x);
         self.delta_x += (scale_x_old - self.scale_x) * (posx_relative - self.delta_x) / scale_x_old;
     }
 
     fn scroll_y(&mut self, dy: f32, posy: u32, height: u32) {
         let posy_relative = -(2.0 * (posy as f32) / (height as f32) - 1.0);
         let scale_y_old = self.scale_y;
-        let factor_y = SCROLL_BASE.powf(dy);
-        self.scale_y = f32::max(SCALE_MIN, self.scale_y * factor_y);
+        let factor_y = cfg::SCROLL_BASE.powf(dy);
+        self.scale_y = f32::max(cfg::SCALE_MIN, self.scale_y * factor_y);
         self.delta_y += (scale_y_old - self.scale_y) * (posy_relative - self.delta_y) / scale_y_old;
     }
 
@@ -211,7 +197,7 @@ fn main() {
         .build_glium()
         .unwrap();
     let mut texture_std    = build_renderable_texture(&display, width, height);
-    let mut texture_lowres = build_renderable_texture(&display, ((width as f32) * LOWRES_FACTOR) as u32, ((height as f32) * LOWRES_FACTOR) as u32);
+    let mut texture_lowres = build_renderable_texture(&display, ((width as f32) * cfg::LOWRES_FACTOR) as u32, ((height as f32) * cfg::LOWRES_FACTOR) as u32);
 
     let mut vertex_buffer_points  = glium::VertexBuffer::new(&display, &points).unwrap();
     let vertex_buffer_texture = glium::VertexBuffer::new(&display, &vertices_texture).unwrap();
@@ -246,9 +232,9 @@ fn main() {
         .. Default::default()
     };
 
-    let mut gamma:      f32  = GAMMA_DEFAULT;
-    let mut pointsize:  f32  = POINTSIZE_DEFAULT;
-    let mut showborder: bool = SHOWBORDER_DEFAULT;
+    let mut gamma:      f32  = cfg::GAMMA_DEFAULT;
+    let mut pointsize:  f32  = cfg::POINTSIZE_DEFAULT;
+    let mut showborder: bool = cfg::SHOWBORDER_DEFAULT;
     let mut projection = Projection::new();
     projection.adjust_x(columns[column_x].min, columns[column_x].max);
     projection.adjust_y(columns[column_y].min, columns[column_y].max);
@@ -273,7 +259,7 @@ fn main() {
                 &uniform! {
                     matrix: projection.get_matrix(),
                     inv_n:     1.0 / (n as f32),
-                    pointsize: pointsize * LOWRES_FACTOR,
+                    pointsize: pointsize * cfg::LOWRES_FACTOR,
                     showborder: if showborder { 1f32 } else { 0f32 },
                 },
                 &params_points
@@ -285,7 +271,7 @@ fn main() {
         }
         let lowres_now   = Instant::now();
         let lowres_delta = lowres_now.duration_since(lowres_start);
-        if lowres_delta > Duration::from_millis(LOWRES_MILLIS) {
+        if lowres_delta > Duration::from_millis(cfg::LOWRES_MILLIS) {
             texture_std.as_surface().clear_color(0.0, 0.0, 0.0, 0.0);
             texture_std.as_surface().draw(
                 &vertex_buffer_points,
@@ -333,28 +319,28 @@ fn main() {
                             redraw = true;
                         },
                         glutin::VirtualKeyCode::J => {
-                            pointsize = f32::min(pointsize * POINTSIZE_CHANGE, POINTSIZE_MAX);
+                            pointsize = f32::min(pointsize * cfg::POINTSIZE_CHANGE, cfg::POINTSIZE_MAX);
                             redraw = true;
                         },
                         glutin::VirtualKeyCode::K => {
-                            pointsize = f32::max(pointsize / POINTSIZE_CHANGE, POINTSIZE_MIN);
+                            pointsize = f32::max(pointsize / cfg::POINTSIZE_CHANGE, cfg::POINTSIZE_MIN);
                             redraw = true;
                         },
                         glutin::VirtualKeyCode::N => {
-                            gamma = f32::min(gamma * GAMMA_CHANGE, GAMMA_MAX);
+                            gamma = f32::min(gamma * cfg::GAMMA_CHANGE, cfg::GAMMA_MAX);
                             redraw = true;
                         },
                         glutin::VirtualKeyCode::M => {
-                            gamma = f32::max(gamma / GAMMA_CHANGE, GAMMA_MIN);
+                            gamma = f32::max(gamma / cfg::GAMMA_CHANGE, cfg::GAMMA_MIN);
                             redraw = true;
                         },
                         glutin::VirtualKeyCode::R => {
                             projection.adjust_x(columns[column_x].min, columns[column_x].max);
                             projection.adjust_y(columns[column_y].min, columns[column_y].max);
                             projection.adjust_z(columns[column_z].min, columns[column_z].max);
-                            gamma      = GAMMA_DEFAULT;
-                            pointsize  = POINTSIZE_DEFAULT;
-                            showborder = SHOWBORDER_DEFAULT;
+                            gamma      = cfg::GAMMA_DEFAULT;
+                            pointsize  = cfg::POINTSIZE_DEFAULT;
+                            showborder = cfg::SHOWBORDER_DEFAULT;
                             redraw = true;
                         },
                         glutin::VirtualKeyCode::Left => {
@@ -440,7 +426,7 @@ fn main() {
                     width  = w;
                     height = h;
                     texture_std    = build_renderable_texture(&display, width, height);
-                    texture_lowres = build_renderable_texture(&display, ((width as f32) * LOWRES_FACTOR) as u32, ((height as f32) * LOWRES_FACTOR) as u32);
+                    texture_lowres = build_renderable_texture(&display, ((width as f32) * cfg::LOWRES_FACTOR) as u32, ((height as f32) * cfg::LOWRES_FACTOR) as u32);
                     redraw = true;
                 },
                 _ => ()
@@ -456,7 +442,7 @@ fn main() {
         // step 5: throttle FPS
         let this_frame    = Instant::now();
         let frame_delta   = this_frame.duration_since(last_frame);
-        let desired_delta = Duration::from_millis(FRAME_MILLIS);
+        let desired_delta = Duration::from_millis(cfg::FRAME_MILLIS);
         if frame_delta < desired_delta {
             thread::sleep(desired_delta - frame_delta);
         }
