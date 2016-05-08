@@ -271,7 +271,7 @@ fn main() {
         }
         let lowres_now   = Instant::now();
         let lowres_delta = lowres_now.duration_since(lowres_start);
-        if lowres_delta > Duration::from_millis(cfg::LOWRES_MILLIS) {
+        if lowres && lowres_delta > Duration::from_millis(cfg::LOWRES_MILLIS) {
             texture_std.as_surface().clear_color(0.0, 0.0, 0.0, 0.0);
             texture_std.as_surface().draw(
                 &vertex_buffer_points,
