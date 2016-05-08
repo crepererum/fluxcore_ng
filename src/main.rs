@@ -415,6 +415,9 @@ fn main() {
                         glutin::VirtualKeyCode::R => {
                             projection.adjust_x(columns[column_x].min, columns[column_x].max);
                             projection.adjust_y(columns[column_y].min, columns[column_y].max);
+                            projection.adjust_z(columns[column_z].min, columns[column_z].max);
+                            gamma     = GAMMA_DEFAULT;
+                            pointsize = POINTSIZE_DEFAULT;
                             redraw = true;
                         },
                         glutin::VirtualKeyCode::Left => {
