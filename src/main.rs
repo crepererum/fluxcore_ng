@@ -4,6 +4,7 @@ extern crate env_logger;
 #[macro_use] extern crate log;
 
 mod data;
+mod res;
 
 use clap::{Arg, App};
 use data::Point;
@@ -22,12 +23,6 @@ struct TextureVertex {
 
 implement_vertex!(Point, position);
 implement_vertex!(TextureVertex, position, tex_coords);
-
-
-static VERTEX_SHADER_POINTS_SRC:    &'static str = include_str!("../res/shader.points.vertex.glsl");
-static FRAGMENT_SHADER_POINTS_SRC:  &'static str = include_str!("../res/shader.points.fragment.glsl");
-static VERTEX_SHADER_TEXTURE_SRC:   &'static str = include_str!("../res/shader.texture.vertex.glsl");
-static FRAGMENT_SHADER_TEXTURE_SRC: &'static str = include_str!("../res/shader.texture.fragment.glsl");
 
 static FRAME_MILLIS:       u64  = 50;
 static GAMMA_CHANGE:       f32  = 1.1;
@@ -224,17 +219,17 @@ fn main() {
     let indices_texture = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
     let source_code_points = glium::program::ProgramCreationInput::SourceCode {
-        fragment_shader: FRAGMENT_SHADER_POINTS_SRC,
+        fragment_shader: res::FRAGMENT_SHADER_POINTS_SRC,
         geometry_shader: None,
         outputs_srgb: false,
         tessellation_control_shader: None,
         tessellation_evaluation_shader: None,
         transform_feedback_varyings: None,
         uses_point_size: true,
-        vertex_shader: VERTEX_SHADER_POINTS_SRC,
+        vertex_shader: res::VERTEX_SHADER_POINTS_SRC,
     };
     let program_points = glium::Program::new(&display, source_code_points).unwrap();
-    let program_texture = glium::Program::from_source(&display, VERTEX_SHADER_TEXTURE_SRC, FRAGMENT_SHADER_TEXTURE_SRC, None).unwrap();
+    let program_texture = glium::Program::from_source(&display, res::VERTEX_SHADER_TEXTURE_SRC, res::FRAGMENT_SHADER_TEXTURE_SRC, None).unwrap();
 
     let params_points = glium::DrawParameters {
         blend: glium::Blend {
