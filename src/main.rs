@@ -290,16 +290,20 @@ fn main() {
 
         // step 2: draw texture to screen
         let mut target = display.draw();
-        target.draw(
-            &vertex_buffer_texture,
-            &indices_texture,
-            &program_texture,
-            &uniform! {
-                inv_gamma: (1.0 / gamma) as f32,
-                tex:       if lowres { &texture_lowres } else {&texture_std},
-            },
-            &Default::default()
-        ).unwrap();
+        {
+            let sampler = glium::uniforms::Sampler::new(if lowres { &texture_lowres } else {&texture_std})
+                .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp);
+            target.draw(
+                &vertex_buffer_texture,
+                &indices_texture,
+                &program_texture,
+                &uniform! {
+                    inv_gamma: (1.0 / gamma) as f32,
+                    tex:       sampler,
+                },
+                &Default::default()
+            ).unwrap();
+        }
         target.finish().unwrap();
 
         // step 3: handle events
