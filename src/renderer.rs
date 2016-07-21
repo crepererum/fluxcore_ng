@@ -488,6 +488,10 @@ impl Renderer {
                             self.user_state.gamma_decrease();
                             self.redraw = true;
                         },
+                        glutin::VirtualKeyCode::Q => {
+                            *exit = true;
+                            return;
+                        }
                         glutin::VirtualKeyCode::R => {
                             self.projection.adjust_x(self.columns[self.column_state.x].min, self.columns[self.column_state.x].max);
                             self.projection.adjust_y(self.columns[self.column_state.y].min, self.columns[self.column_state.y].max);
