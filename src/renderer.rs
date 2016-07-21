@@ -27,13 +27,27 @@ implement_vertex!(Point, position);
 implement_vertex!(TextureVertex, position, tex_coords);
 
 
-pub fn build_renderable_texture<F>(facade: &F, width: u32, height: u32) -> glium::Texture2d where F: Facade {
+struct WindowDims {
+    width: u32,
+    height: u32,
+}
+
+impl WindowDims {
+    fn to_lowres(&self) -> WindowDims {
+        WindowDims {
+            width: ((self.width as f32) * cfg::LOWRES_FACTOR) as u32,
+            height: ((self.height as f32) * cfg::LOWRES_FACTOR) as u32,
+        }
+    }
+}
+
+fn build_renderable_texture<F>(facade: &F, window_dims: &WindowDims) -> glium::Texture2d where F: Facade {
     glium::Texture2d::empty_with_format(
         facade,
         glium::texture::UncompressedFloatFormat::F32F32F32F32,
         glium::texture::MipmapsOption::NoMipmap,
-        width,
-        height
+        window_dims.width,
+        window_dims.height
     ).unwrap()
 }
 
@@ -117,23 +131,133 @@ impl Projection {
     }
 }
 
-pub struct Renderer {
-    width: u32,
-    height: u32,
-    columns: Vec<Column>,
-    column_x: usize,
-    column_y: usize,
-    column_z: usize,
-    n: usize,
-    m: usize,
-    display: Box<GlutinFacade>,
+struct ColumnState {
+    x: usize,
+    y: usize,
+    z: usize,
+}
+
+impl ColumnState {
+    fn new(m: usize) -> ColumnState {
+        ColumnState {
+            x: 0,
+            y: 1,
+            z: if m > 2 { 2 } else { 1 },
+        }
+    }
+
+    fn x_prev(&mut self, m: usize) {
+        if self.x == 0 {
+            self.x = m;
+        }
+        self.x -= 1;
+    }
+
+    fn y_prev(&mut self, m: usize) {
+        if self.y == 0 {
+            self.y = m;
+        }
+        self.y -= 1;
+    }
+
+    fn z_prev(&mut self, m: usize) {
+        if self.z == 0 {
+            self.z = m;
+        }
+        self.z -= 1;
+    }
+
+    fn x_next(&mut self, m: usize) {
+        self.x += 1;
+        if self.x >= m {
+            self.x = 0;
+        }
+    }
+
+    fn y_next(&mut self, m: usize) {
+        self.y += 1;
+        if self.y >= m {
+            self.y = 0;
+        }
+    }
+
+    fn z_next(&mut self, m: usize) {
+        self.z += 1;
+        if self.z >= m {
+            self.z = 0;
+        }
+    }
+}
+
+struct MouseState {
+    x: u32,
+    y: u32,
+    down: bool,
+}
+
+impl MouseState {
+    fn new() -> MouseState {
+        MouseState {
+            x: 0,
+            y: 0,
+            down: false,
+        }
+    }
+}
+
+struct UserState {
     gamma: f32,
     pointsize: f32,
     showborder: bool,
+}
+
+impl UserState {
+    fn new() -> UserState {
+        UserState {
+            gamma:      cfg::GAMMA_DEFAULT,
+            pointsize:  cfg::POINTSIZE_DEFAULT,
+            showborder: cfg::SHOWBORDER_DEFAULT,
+        }
+    }
+
+    fn reset(&mut self) {
+        self.gamma      = cfg::GAMMA_DEFAULT;
+        self.pointsize  = cfg::POINTSIZE_DEFAULT;
+        self.showborder = cfg::SHOWBORDER_DEFAULT;
+    }
+
+    fn showborder_toggle(&mut self) {
+        self.showborder = !self.showborder;
+    }
+
+    fn pointsize_increase(&mut self) {
+        self.pointsize = f32::min(self.pointsize * cfg::POINTSIZE_CHANGE, cfg::POINTSIZE_MAX);
+    }
+
+    fn pointsize_decrease(&mut self) {
+        self.pointsize = f32::max(self.pointsize / cfg::POINTSIZE_CHANGE, cfg::POINTSIZE_MIN);
+    }
+
+    fn gamma_increase(&mut self) {
+        self.gamma = f32::min(self.gamma * cfg::GAMMA_CHANGE, cfg::GAMMA_MAX);
+
+    }
+
+    fn gamma_decrease(&mut self) {
+        self.gamma = f32::max(self.gamma / cfg::GAMMA_CHANGE, cfg::GAMMA_MIN);
+    }
+}
+
+pub struct Renderer {
+    window_dims: WindowDims,
+    columns: Vec<Column>,
+    column_state: ColumnState,
+    n: usize,
+    m: usize,
+    display: Box<GlutinFacade>,
+    user_state: UserState,
     projection: Projection,
-    mouse_x: u32,
-    mouse_y: u32,
-    mouse_down: bool,
+    mouse_state: MouseState,
     last_frame: Instant,
     redraw: bool,
     lowres: bool,
@@ -152,11 +276,11 @@ impl Renderer {
     pub fn new(width: u32, height: u32, columns: Vec<Column>, fname: String) -> Renderer {
         info!("set up OpenGL stuff");
 
+        let window_dims = WindowDims{width: width, height: height};
+
         let m = columns.len();
-        let column_x: usize = 0;
-        let column_y: usize = 1;
-        let column_z: usize = if m > 2 { 2 } else { 1 };
-        let points = data::points_from_columns(&columns, column_x, column_y, column_z);
+        let column_state = ColumnState::new(m);
+        let points = data::points_from_columns(&columns, column_state.x, column_state.y, column_state.z);
 
         let vertices_texture = vec![
             TextureVertex { position: [-1.0, -1.0], tex_coords: [0.0, 0.0] },
@@ -190,35 +314,28 @@ impl Renderer {
         };
 
         let mut projection = Projection::new();
-        projection.adjust_x(columns[column_x].min, columns[column_x].max);
-        projection.adjust_y(columns[column_y].min, columns[column_y].max);
-        projection.adjust_z(columns[column_z].min, columns[column_z].max);
+        projection.adjust_x(columns[column_state.x].min, columns[column_state.x].max);
+        projection.adjust_y(columns[column_state.y].min, columns[column_state.y].max);
+        projection.adjust_z(columns[column_state.z].min, columns[column_state.z].max);
 
 
         let vertex_buffer_points  = glium::VertexBuffer::new(&display, &points).unwrap();
         let vertex_buffer_texture = glium::VertexBuffer::new(&display, &vertices_texture).unwrap();
-        let texture_std           = build_renderable_texture(&display, width, height);
-        let texture_lowres        = build_renderable_texture(&display, ((width as f32) * cfg::LOWRES_FACTOR) as u32, ((height as f32) * cfg::LOWRES_FACTOR) as u32);
+        let texture_std           = build_renderable_texture(&display, &window_dims);
+        let texture_lowres        = build_renderable_texture(&display, &window_dims.to_lowres());
         let program_points        = glium::Program::new(&display, source_code_points).unwrap();
         let program_texture       = glium::Program::from_source(&display, res::VERTEX_SHADER_TEXTURE_SRC, res::FRAGMENT_SHADER_TEXTURE_SRC, None).unwrap();
 
         Renderer {
-            width: width,
-            height: height,
+            window_dims: window_dims,
             columns: columns,
-            column_x: column_x,
-            column_y: column_y,
-            column_z: column_z,
+            column_state: column_state,
             n: points.len(),
             m: m,
             display: Box::new(display),
-            gamma: cfg::GAMMA_DEFAULT,
-            pointsize: cfg::POINTSIZE_DEFAULT,
-            showborder: cfg::SHOWBORDER_DEFAULT,
+            user_state: UserState::new(),
             projection: projection,
-            mouse_x: 0,
-            mouse_y: 0,
-            mouse_down: false,
+            mouse_state: MouseState::new(),
             last_frame: Instant::now(),
             redraw: true,
             lowres: false,
@@ -262,8 +379,8 @@ impl Renderer {
                     &uniform! {
                         matrix: self.projection.get_matrix(),
                         inv_n:     1.0 / (self.n as f32),
-                        pointsize: self.pointsize * cfg::LOWRES_FACTOR,
-                        showborder: if self.showborder { 1f32 } else { 0f32 },
+                        pointsize: self.user_state.pointsize * cfg::LOWRES_FACTOR,
+                        showborder: if self.user_state.showborder { 1f32 } else { 0f32 },
                     },
                     &params_points
                 ).unwrap();
@@ -283,8 +400,8 @@ impl Renderer {
                     &uniform! {
                         matrix: self.projection.get_matrix(),
                         inv_n:     1.0 / (self.n as f32),
-                        pointsize: self.pointsize,
-                        showborder: if self.showborder { 1f32 } else { 0f32 },
+                        pointsize: self.user_state.pointsize,
+                        showborder: if self.user_state.showborder { 1f32 } else { 0f32 },
                     },
                     &params_points
                 ).unwrap();
@@ -301,7 +418,7 @@ impl Renderer {
                     &self.indices_texture,
                     &self.program_texture,
                     &uniform! {
-                        inv_gamma: (1.0 / self.gamma) as f32,
+                        inv_gamma: (1.0 / self.user_state.gamma) as f32,
                         tex:       sampler,
                     },
                     &Default::default()
@@ -322,118 +439,98 @@ impl Renderer {
                                 break 'mainloop;
                             }
                             glutin::VirtualKeyCode::B => {
-                                self.showborder = !self.showborder;
+                                self.user_state.showborder_toggle();
                                 self.redraw = true;
                             },
                             glutin::VirtualKeyCode::J => {
-                                self.pointsize = f32::min(self.pointsize * cfg::POINTSIZE_CHANGE, cfg::POINTSIZE_MAX);
+                                self.user_state.pointsize_increase();
                                 self.redraw = true;
                             },
                             glutin::VirtualKeyCode::K => {
-                                self.pointsize = f32::max(self.pointsize / cfg::POINTSIZE_CHANGE, cfg::POINTSIZE_MIN);
+                                self.user_state.pointsize_decrease();
                                 self.redraw = true;
                             },
                             glutin::VirtualKeyCode::N => {
-                                self.gamma = f32::min(self.gamma * cfg::GAMMA_CHANGE, cfg::GAMMA_MAX);
+                                self.user_state.gamma_increase();
                                 self.redraw = true;
                             },
                             glutin::VirtualKeyCode::M => {
-                                self.gamma = f32::max(self.gamma / cfg::GAMMA_CHANGE, cfg::GAMMA_MIN);
+                                self.user_state.gamma_decrease();
                                 self.redraw = true;
                             },
                             glutin::VirtualKeyCode::R => {
-                                self.projection.adjust_x(self.columns[self.column_x].min, self.columns[self.column_x].max);
-                                self.projection.adjust_y(self.columns[self.column_y].min, self.columns[self.column_y].max);
-                                self.projection.adjust_z(self.columns[self.column_z].min, self.columns[self.column_z].max);
-                                self.gamma      = cfg::GAMMA_DEFAULT;
-                                self.pointsize  = cfg::POINTSIZE_DEFAULT;
-                                self.showborder = cfg::SHOWBORDER_DEFAULT;
+                                self.projection.adjust_x(self.columns[self.column_state.x].min, self.columns[self.column_state.x].max);
+                                self.projection.adjust_y(self.columns[self.column_state.y].min, self.columns[self.column_state.y].max);
+                                self.projection.adjust_z(self.columns[self.column_state.z].min, self.columns[self.column_state.z].max);
+                                self.user_state.reset();
                                 self.redraw = true;
                             },
                             glutin::VirtualKeyCode::Left => {
-                                if self.column_x == 0 {
-                                    self.column_x = self.m as usize;
-                                }
-                                self.column_x -= 1;
+                                self.column_state.x_prev(self.m);
                                 rebuild_points = true;
-                                self.projection.adjust_x(self.columns[self.column_x].min, self.columns[self.column_x].max);
+                                self.projection.adjust_x(self.columns[self.column_state.x].min, self.columns[self.column_state.x].max);
                                 self.redraw = true;
                             },
                             glutin::VirtualKeyCode::Right => {
-                                self.column_x += 1;
-                                if self.column_x >= self.m {
-                                    self.column_x = 0;
-                                }
+                                self.column_state.x_next(self.m);
                                 rebuild_points = true;
-                                self.projection.adjust_x(self.columns[self.column_x].min, self.columns[self.column_x].max);
+                                self.projection.adjust_x(self.columns[self.column_state.x].min, self.columns[self.column_state.x].max);
                                 self.redraw = true;
                             },
                             glutin::VirtualKeyCode::Up => {
-                                if self.column_y == 0 {
-                                    self.column_y = self.m as usize;
-                                }
-                                self.column_y -= 1;
+                                self.column_state.y_prev(self.m);
                                 rebuild_points = true;
-                                self.projection.adjust_y(self.columns[self.column_y].min, self.columns[self.column_y].max);
+                                self.projection.adjust_y(self.columns[self.column_state.y].min, self.columns[self.column_state.y].max);
                                 self.redraw = true;
                             },
                             glutin::VirtualKeyCode::Down => {
-                                self.column_y += 1;
-                                if self.column_y >= self.m {
-                                    self.column_y = 0;
-                                }
+                                self.column_state.y_next(self.m);
                                 rebuild_points = true;
-                                self.projection.adjust_y(self.columns[self.column_y].min, self.columns[self.column_y].max);
+                                self.projection.adjust_y(self.columns[self.column_state.y].min, self.columns[self.column_state.y].max);
                                 self.redraw = true;
                             },
                             glutin::VirtualKeyCode::PageUp => {
-                                if self.column_z == 0 {
-                                    self.column_z = self.m as usize;
-                                }
-                                self.column_z -= 1;
+                                self.column_state.z_prev(self.m);
                                 rebuild_points = true;
-                                self.projection.adjust_z(self.columns[self.column_z].min, self.columns[self.column_z].max);
+                                self.projection.adjust_z(self.columns[self.column_state.z].min, self.columns[self.column_state.z].max);
                                 self.redraw = true;
                             },
                             glutin::VirtualKeyCode::PageDown => {
-                                self.column_z += 1;
-                                if self.column_z >= self.m {
-                                    self.column_z = 0;
-                                }
+                                self.column_state.z_next(self.m);
                                 rebuild_points = true;
-                                self.projection.adjust_z(self.columns[self.column_z].min, self.columns[self.column_z].max);
+                                self.projection.adjust_z(self.columns[self.column_state.z].min, self.columns[self.column_state.z].max);
                                 self.redraw = true;
                             },
                             _ => ()
                         }
                     },
                     glutin::Event::MouseInput(glutin::ElementState::Pressed, glutin::MouseButton::Left) => {
-                        self.mouse_down = true;
+                        self.mouse_state.down = true;
                     },
                     glutin::Event::MouseInput(glutin::ElementState::Released, glutin::MouseButton::Left) => {
-                        self.mouse_down = false;
+                        self.mouse_state.down = false;
                     },
                     glutin::Event::MouseMoved(posx, posy) => {
-                        if self.mouse_down {
-                            let dx = posx - (self.mouse_x as i32);
-                            let dy = posy - (self.mouse_y as i32);
-                            self.projection.move_x(dx, self.width);
-                            self.projection.move_y(dy, self.height);
+                        if self.mouse_state.down {
+                            let dx = posx - (self.mouse_state.x as i32);
+                            let dy = posy - (self.mouse_state.y as i32);
+                            self.projection.move_x(dx, self.window_dims.width);
+                            self.projection.move_y(dy, self.window_dims.height);
                             self.redraw = true;
                         }
-                        self.mouse_x = posx as u32;
-                        self.mouse_y = posy as u32;
+                        self.mouse_state.x = posx as u32;
+                        self.mouse_state.y = posy as u32;
                     },
                     glutin::Event::MouseWheel(glutin::MouseScrollDelta::LineDelta(dx, dy), glutin::TouchPhase::Moved) => {
-                        self.projection.scroll_x(dx, self.mouse_x, self.width);
-                        self.projection.scroll_y(dy, self.mouse_y, self.height);
+                        self.projection.scroll_x(dx, self.mouse_state.x, self.window_dims.width);
+                        self.projection.scroll_y(dy, self.mouse_state.y, self.window_dims.height);
                         self.redraw = true;
                     },
                     glutin::Event::Resized(w, h) => {
-                        self.width  = w;
-                        self.height = h;
-                        self.texture_std    = build_renderable_texture(&*self.display, self.width, self.height);
-                        self.texture_lowres = build_renderable_texture(&*self.display, ((self.width as f32) * cfg::LOWRES_FACTOR) as u32, ((self.height as f32) * cfg::LOWRES_FACTOR) as u32);
+                        self.window_dims.width = w;
+                        self.window_dims.height = h;
+                        self.texture_std    = build_renderable_texture(&*self.display, &self.window_dims);
+                        self.texture_lowres = build_renderable_texture(&*self.display, &self.window_dims.to_lowres());
                         self.redraw = true;
                     },
                     _ => ()
@@ -442,7 +539,12 @@ impl Renderer {
 
             // step 4: update geometry
             if rebuild_points {
-                let points                = data::points_from_columns(&self.columns, self.column_x, self.column_y, self.column_z);
+                let points = data::points_from_columns(
+                    &self.columns,
+                    self.column_state.x,
+                    self.column_state.y,
+                    self.column_state.z
+                );
                 self.vertex_buffer_points = glium::VertexBuffer::new(&*self.display, &points).unwrap();
             }
 
