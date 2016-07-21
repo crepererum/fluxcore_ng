@@ -9,7 +9,7 @@ mod renderer;
 mod res;
 
 use clap::{Arg, App};
-use renderer::run;
+use renderer::Renderer;
 
 fn is_uint_and_geq_100(s: String) -> Result<(), String> {
     match s.parse::<u32>() {
@@ -64,7 +64,8 @@ fn main() {
         }
     };
 
-    run(width, height, columns, file);
+    let mut r = Renderer::new(width, height, columns, file);
+    r.run_forever();
 
     info!("shutting down");
 }
