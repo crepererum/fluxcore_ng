@@ -2,19 +2,12 @@
 
 in vec3 position;
 
-out vec3  pointcolor;
-out float atborder;  // = bool
+out vec3  pointcolor;  // = Lab color space
+out float atborder;    // = bool
 
 uniform mat4  matrix;
 uniform float pointsize;
 uniform float showborder;  // = bool
-
-// http://lolengine.net/blog/2013/07/27/rgb-to-hsv-in-glsl
-vec3 hsv2rgb(vec3 c) {
-    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
 
 void main() {
     gl_PointSize     = pointsize;
@@ -46,5 +39,6 @@ void main() {
         }
     }
 
-    pointcolor = hsv2rgb(vec3(0.5 * pos_virtual.z, 1.0, 1.0)) * alpha;
+    float color_a_and_b = pos_virtual.z;
+    pointcolor = vec3(1.0, color_a_and_b, color_a_and_b) * alpha;
 }

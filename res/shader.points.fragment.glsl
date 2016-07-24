@@ -1,9 +1,9 @@
 #version 140
 
-in vec3  pointcolor;
+in vec3  pointcolor;  // Lab color space
 in float atborder;
 
-out vec4 color;
+out vec4 color;       // Lab + counter
 
 uniform float inv_n;
 
