@@ -17,7 +17,7 @@ float f_inv(float t) {
 }
 
 vec3 Lab2XYZ(vec3 Lab) {
-    // that's the D65 white point!
+    // that's the D65 white point with the 2 degrees (CIE 1931) observer
     const float Xn = 95.047;
     const float Yn = 100.0;
     const float Zn = 108.883;
@@ -37,10 +37,11 @@ vec3 Lab2XYZ(vec3 Lab) {
 
 vec3 XYZ2RGB(vec3 XYZ) {
     // D65 as well
+    // with sRGB
     const mat3 XYZ_to_RGB = mat3(
-         2.9515373, -1.2894116, -0.4738445,
-        -1.0851093,  1.9908566,  0.0372026,
-         0.0854934, -0.2694964,  1.0912975
+         3.2404542, -1.5371385, -0.4985314,
+        -0.9692660,  1.8760108,  0.0415560,
+         0.0556434, -0.2040259,  1.0572252
     );
 
     return XYZ_to_RGB * XYZ;
