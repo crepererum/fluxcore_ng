@@ -254,7 +254,7 @@ pub struct Renderer {
     column_state: ColumnState,
     n: usize,
     m: usize,
-    display: Box<GlutinFacade>,
+    display: GlutinFacade,
     user_state: UserState,
     projection: Projection,
     mouse_state: MouseState,
@@ -332,7 +332,7 @@ impl Renderer {
             column_state: column_state,
             n: points.len(),
             m: m,
-            display: Box::new(display),
+            display: display,
             user_state: UserState::new(),
             projection: projection,
             mouse_state: MouseState::new(),
@@ -563,8 +563,8 @@ impl Renderer {
                 glutin::Event::Resized(w, h) => {
                     self.window_dims.width = w;
                     self.window_dims.height = h;
-                    self.texture_std    = build_renderable_texture(&*self.display, &self.window_dims);
-                    self.texture_lowres = build_renderable_texture(&*self.display, &self.window_dims.to_lowres());
+                    self.texture_std    = build_renderable_texture(&self.display, &self.window_dims);
+                    self.texture_lowres = build_renderable_texture(&self.display, &self.window_dims.to_lowres());
                     self.redraw = true;
                 },
                 _ => ()
@@ -579,7 +579,7 @@ impl Renderer {
             self.column_state.y,
             self.column_state.z
         );
-        self.vertex_buffer_points = glium::VertexBuffer::new(&*self.display, &points).unwrap();
+        self.vertex_buffer_points = glium::VertexBuffer::new(&self.display, &points).unwrap();
     }
 
     fn throttle(&mut self) {
