@@ -297,6 +297,7 @@ impl Renderer {
                 glutin::Api::OpenGl,
                 (3, 3)
             ))
+            .with_srgb(Some(true))
             .with_gl_profile(glutin::GlProfile::Core)
             .with_title(format!("fluxcore_ng - {}", fname))
             .build_glium()
