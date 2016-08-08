@@ -13,6 +13,7 @@ use data::{Column, Point};
 
 use res;
 
+use std::f32;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -74,7 +75,7 @@ impl Projection {
     }
 
     fn adjust_x(&mut self, min: f32, max: f32) {
-        if max != min {
+        if (max - min).abs() > f32::EPSILON {
             self.scale_x = 2.0 / (max - min);
         }
         self.delta_x = -1.0 - min * self.scale_x;
@@ -82,7 +83,7 @@ impl Projection {
     }
 
     fn adjust_y(&mut self, min: f32, max: f32) {
-        if max != min {
+        if (max - min).abs() > f32::EPSILON {
             self.scale_y = 2.0 / (max - min);
         }
         self.delta_y = -1.0 - min * self.scale_y;
@@ -90,7 +91,7 @@ impl Projection {
     }
 
     fn adjust_z(&mut self, min: f32, max: f32) {
-        if max != min {
+        if (max - min).abs() > f32::EPSILON {
             self.scale_z = 1.0 / (max - min);
         }
         self.delta_z = -min * self.scale_z;
@@ -465,7 +466,7 @@ impl Renderer {
                 },
                 glutin::Event::KeyboardInput(glutin::ElementState::Pressed, _, Some(code)) => {
                     match code {
-                        glutin::VirtualKeyCode::Escape => {
+                        glutin::VirtualKeyCode::Escape | glutin::VirtualKeyCode::Q => {
                             *exit = true;
                             return;
                         }
@@ -489,10 +490,6 @@ impl Renderer {
                             self.user_state.gamma_decrease();
                             self.redraw = true;
                         },
-                        glutin::VirtualKeyCode::Q => {
-                            *exit = true;
-                            return;
-                        }
                         glutin::VirtualKeyCode::R => {
                             self.projection.adjust_x(self.columns[self.column_state.x].min, self.columns[self.column_state.x].max);
                             self.projection.adjust_y(self.columns[self.column_state.y].min, self.columns[self.column_state.y].max);

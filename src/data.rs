@@ -17,9 +17,9 @@ pub struct Column {
 
 
 impl Column {
-    fn new(name: &String) -> Column {
+    fn new(name: &str) -> Column {
         Column {
-            name: name.clone(),
+            name: String::from(name),
             data: vec![],
             min: f32::INFINITY,
             max: f32::NEG_INFINITY,
@@ -34,19 +34,13 @@ impl Column {
 }
 
 
-fn is_na_string(s: &String) -> bool {
+fn is_na_string(s: &str) -> bool {
     let lower = s.to_lowercase();
-    if lower == "?" {
-        true
-    } else if lower == "na" {
-        true
-    } else {
-        false
-    }
+    lower == "?" || lower == "na"
 }
 
 
-pub fn columns_from_file(fname: &String) -> Result<Vec<Column>, String> {
+pub fn columns_from_file(fname: &str) -> Result<Vec<Column>, String> {
     let mut rdr = match csv::Reader::from_file(fname) {
         Ok(f) => f.has_headers(true),
         Err(_) => {
@@ -88,10 +82,10 @@ pub fn columns_from_file(fname: &String) -> Result<Vec<Column>, String> {
     Ok(columns)
 }
 
-pub fn points_from_columns(cols: &Vec<Column>, a: usize, b: usize, c: usize) -> Vec<Point> {
+pub fn points_from_columns(cols: &[Column], a: usize, b: usize, c: usize) -> Vec<Point> {
     cols[a].data.iter().zip(cols[b].data.iter()).zip(cols[c].data.iter()).map(|((x, y), z)| {
         Point {
-            position: [x.clone(), y.clone(), z.clone()]
+            position: [*x, *y, *z]
         }
     }).collect()
 }
